@@ -46,10 +46,12 @@ When releasing a new version of an SDK, follow these steps in order:
 1. **Bump the version number** in the package manifest:
    - TypeScript SDK: update `"version"` in `src/client/acontext-ts/package.json`
    - Python SDK: update `version` in `src/client/acontext-py/pyproject.toml`
+   - OpenClaw Plugin: update `"version"` in `src/packages/openclaw/package.json`
 2. **Regenerate the lock file** so it stays in sync:
    - TypeScript SDK: run `npm install` in `src/client/acontext-ts/` (updates `package-lock.json`)
    - Python SDK: run `uv lock` in `src/client/acontext-py/` (updates `uv.lock`)
+   - OpenClaw Plugin: run `npm install` in `src/packages/openclaw/` (updates `package-lock.json`)
 3. **Commit** the version bump + lock file changes.
-4. **Tag** the commit using the convention `sdk-ts/vX.Y.Z` or `sdk-py/vX.Y.Z`.
+4. **Tag** the commit using the convention `sdk-ts/vX.Y.Z`, `sdk-py/vX.Y.Z`, or `openclaw/vX.Y.Z`.
 ### Unit Test
 - Always delete the new project you created in the same test
