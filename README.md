@@ -25,50 +25,25 @@
 
 
 
-## What Is Acontext?
+## What is Acontext?
 
 Acontext is an open-source Agent Skills as a Memory Layer: skill memory that **automatically** captures learnings from agent runs and stores knowledge as **Markdown files**. You can read, edit, and share those files across agents, LLMs and frameworks.
 
----
+If you don't want the agent you build **repeat the same mistakes** or **fail to reuse what worked** — and you hate the opaque memory to pollute your context, give Acontext a try.
 
-## Who Is It For?
+## Why?
 
-For developers whose agents **repeat the same mistakes** or **fail to reuse what worked** — and who want that learning to come from runs and live in **files you can read and move**, not in embeddings or an opaque API. 
+People are building more and more complicated Agent Memory, making it **difficult to understand, debug and let the users to fix**. If agent skills can handle every knowledge agent needs with simple files, so as the memory. 
 
-Also for those **manually turning successful runs into runbooks** and wanting that **automated**.
+- Acontext try to build the memory upon agent skills format, so that everyone can actually understand what's the whole memory looks like. 
+- Skill is Memory, Memory is Skill. No matter the skill is coming from the one your download from Clawhub, or the one you made up yourself, Acontext can follow the skills and evolve them accordingly.
 
-You may not need it if you only need in-session chat memory or chat-based retrieval.
+## What Acontext Provides
 
----
-
-## Why Not Other Memory?
-
-Other memory (e.g. Mem0, Zep, vector stores, RAG) stores or retrieves from **conversations** or **static docs**. If you need a layer that learns from **what the agent did** (task outcomes) and turns that into reusable SOPs and warnings, that's **Agent Skills as a memory layer**.
-
-The difference in one line: others store *what was said* or *what was ingested*; the skill layer stores *what the agent did and how it turned out*. Three dimensions that matter when choosing a layer:
-
-| | Skill memory (Agent Skills layer) | Other memory (e.g. Mem0 / Zep) | Vector store / RAG |
-|--|-----------------------------------|--------------------------------|---------------------|
-| **Captures** | What the agent *did* + outcome → procedures, preferences, warnings | What was *said* → facts, preferences | What you *ingested* → chunks |
-| **Stored as** | Markdown files (human-readable, portable) | Embeddings / graph | Embeddings |
-| **Retrieval** | Agent calls tools, gets full units (e.g. whole files) | Semantic or chat recall | Similarity search over chunks |
-
-**In short:** Other memory stores and retrieves chat or ingested docs as-is. Acontext also takes session messages (and execution) as input, but distills from them *what the agent did and how it turned out* — then writes that as structured skill files that grow with every run.
-
-**Why it matters:** When you need "learn from what the agent did, not just recall what was said," a dedicated skill layer keeps that in one place — reusable SOPs and preferences instead of re-explaining or re-fixing the same issues.
-
-**What about Cursor Rules / Claude Skills?** They're hand-written and static; you maintain them. Acontext accumulates skills **automatically** and writes Markdown you can reuse in any IDE or model.
-
----
-
-## What Acontext Does
-
-- **Plain Markdown, any framework** — Skill memories are Markdown files. Use them with LangGraph, Claude, AI SDK, or anything that reads files. No embeddings, no API lock-in. Git, grep, and mount to the sandbox.
-- **You design the structure** — `SKILL.md` defines schema, naming, and file layout. Examples: one file per contact, per project, per runbook.
-- **Tool-based recall, not embeddings** — The agent uses `get_skill` and `get_skill_file` to fetch what it needs. Retrieval is by tool use and reasoning, not semantic top-k. Full units (e.g. whole files), not chunked fragments.
+- **Plain file, any framework** — Skill memories are Markdown files. Use them with LangGraph, Claude, AI SDK, or anything that reads files. No embeddings, no API lock-in. Git, grep, and mount to the sandbox.
+- **You design the structure** — Attach more skills to the learning space, you can define how the schema, naming, and file layout of the memory. For example: one file per contact, per project for the user working context skill.
+- **Progressive disclosure, not search** — The agent uses `get_skill` and `get_skill_file` to fetch what it needs. Retrieval is by tool use and reasoning, not semantic top-k. Full units (e.g. whole files), not chunked fragments.
 - **Download as ZIP, reuse anywhere** — Export skill files as ZIP. Run locally, in another agent, or with another LLM. No vendor lock-in; no re-embedding or migration step.
-
----
 
 ## How It Works
 
@@ -76,28 +51,27 @@ The difference in one line: others store *what was said* or *what was ingested*;
 
 ```mermaid
 flowchart LR
-  A[Session messages] --> B[Task extraction]
-  B --> C[Task complete/failed]
+  A[Session messages] --> C[Task complete/failed]
   C --> D[Distillation]
   D --> E[Skill Agent]
-  E --> F[Markdown files]
+  E --> F[Update Skills]
 ```
 
 - **Session messages** — Conversation (and optionally tool calls, artifacts) is the raw input. Tasks are extracted from the message stream automatically (or inferred from explicit outcome reporting).
 - **Task complete or failed** — When a task is marked done or failed (e.g. by agent report or automatic detection), that outcome is the trigger for learning.
 - **Distillation** — An LLM pass infers from the conversation and execution trace what worked, what failed, and user preferences.
 - **Skill Agent** — Decides where to store (existing skill or new) and writes according to your `SKILL.md` schema.
-- **Markdown files** — Skills are updated. You define the structure in `SKILL.md`; the system does extraction, routing, and writing.
+- **Update Skills** — Skills are updated. You define the structure in `SKILL.md`; the system does extraction, routing, and writing.
 
 ### Recall — How the agent uses skills on the next run
 
 ```mermaid
 flowchart LR
-  E[Agent runs] --> F[get_skill / get_skill_file]
-  F --> G[Use in context]
+  E[Any Agent] --> F[list_skills/get_skill]
+  F --> G[Appear in context]
 ```
 
-Give your agent **Skill Content Tools** (`get_skill`, `get_skill_file`). The agent decides what it needs, calls the tools, and gets the skill content. No embedding search — **tool-based retrieval**, agent in the loop.
+Give your agent **Skill Content Tools** (`get_skill`, `get_skill_file`). The agent decides what it needs, calls the tools, and gets the skill content. No embedding search — **progressive disclosure, agent in the loop**.
 
 
 
