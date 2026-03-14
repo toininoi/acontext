@@ -155,7 +155,7 @@ export const configSchema = {
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(cfg, ALLOWED_KEYS, "acontext config");
 
-    // Resolve apiKey: config > ~/.acontext/credentials.json > env var resolution
+    // Resolve apiKey: ~/.acontext/credentials.json > config/env var
     let resolvedApiKey: string | undefined;
     resolvedApiKey = loadApiKeyFromCredentials();
     if (!resolvedApiKey && typeof cfg.apiKey === "string" && cfg.apiKey) {

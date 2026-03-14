@@ -41,9 +41,9 @@ acontext login
 - If you're in a Interactive Terminal(TTY), this command will open a browser for OAuth, then guides you through project creation. Your API key is saved automatically.
 - If you're in a Non-interactive Terminal(agent/CI), this command will print a login URL for the user to open manually. After user completes, run `acontext login --poll` to finish authentication.
 - Set up a project via `acontext dash projects` commands. If Acontext has existing projects, make sure the user wants to use an existing project or create a new project for you.
-- Read the cli output to get the api key and user login email, you will need it.
-
 ### 3. Add Acontext to Your Agent
+
+Both plugins automatically read your API key and user email from `~/.acontext/credentials.json` and `~/.acontext/auth.json` (written by `acontext login`). No manual configuration is needed after login.
 
 #### Option A: Claude Code Plugin
 
@@ -54,15 +54,6 @@ Add the Acontext marketplace and install the plugin (run inside Claude Code):
 /plugin install acontext
 ```
 
-The plugin automatically reads your API key and user email from `~/.acontext/credentials.json` and `~/.acontext/auth.json` (written by `acontext login`). No manual environment variable setup is needed.
-
-If you prefer explicit configuration, you can set environment variables in your shell profile (`~/.bashrc` or `~/.zshrc`) — they serve as fallback when the files are not present:
-
-```bash
-export ACONTEXT_API_KEY="<your-api-key>"
-export ACONTEXT_USER_ID="<your-login-email>"
-```
-
 Restart Claude Code — the plugin auto-captures conversations and syncs skills to `~/.claude/skills/`.
 
 #### Option B: OpenClaw Plugin
@@ -71,7 +62,7 @@ Restart Claude Code — the plugin auto-captures conversations and syncs skills 
 openclaw plugins install @acontext/openclaw
 ```
 
-The plugin automatically reads your API key and user email from `~/.acontext/credentials.json` and `~/.acontext/auth.json` (written by `acontext login`). You only need to add a minimal config to `openclaw.json`:
+Add a minimal config to `openclaw.json`:
 
 ```json5
 {
@@ -84,26 +75,7 @@ The plugin automatically reads your API key and user email from `~/.acontext/cre
 }
 ```
 
-If you prefer explicit configuration, add API key and user to your `openclaw.json`:
-```json5
-{
-  plugins: {
-    slots: {
-      memory: "acontext"
-    },
-    entries: {
-      "acontext": {
-        enabled: true,
-        config: {
-          "apiKey": "${ACONTEXT_API_KEY}",
-          "userId": "${ACONTEXT_USER_MAIL}"
-        }
-      }
-    }
-  }
-}
-```
-3. Restart the gateway:
+Restart the gateway:
 
 ```bash
 openclaw gateway
@@ -155,18 +127,16 @@ The directory must contain a `SKILL.md` with name and description in YAML front-
 
 ## Claude Code Plugin Configuration
 
-Settings are resolved with priority: `~/.acontext/` files > environment variables > defaults. After running `acontext login`, the plugin works automatically without any env vars.
+After `acontext login`, the plugin works automatically — API key and user are read from `~/.acontext/`. The following env vars can override defaults if needed:
 
-| Env Var                        | Default                             | Description                                            |
-| ------------------------------ | ----------------------------------- | ------------------------------------------------------ |
-| `ACONTEXT_API_KEY`             | from `~/.acontext/credentials.json` | Acontext API key (auto-detected from CLI login)        |
-| `ACONTEXT_BASE_URL`            | `https://api.acontext.app/api/v1`   | API base URL                                           |
-| `ACONTEXT_USER_ID`             | from `~/.acontext/auth.json`        | Scope sessions per user (auto-detected from CLI login) |
-| `ACONTEXT_LEARNING_SPACE_ID`   | auto-created                        | Explicit Learning Space ID                             |
-| `ACONTEXT_SKILLS_DIR`          | `~/.claude/skills`                  | Directory where skills are synced                      |
-| `ACONTEXT_AUTO_CAPTURE`        | `true`                              | Store messages after each agent turn                   |
-| `ACONTEXT_AUTO_LEARN`          | `true`                              | Trigger skill distillation after sessions              |
-| `ACONTEXT_MIN_TURNS_FOR_LEARN` | `4`                                 | Minimum turns before triggering auto-learn             |
+| Env Var                        | Default                           | Description                            |
+| ------------------------------ | --------------------------------- | -------------------------------------- |
+| `ACONTEXT_BASE_URL`            | `https://api.acontext.app/api/v1` | API base URL                           |
+| `ACONTEXT_LEARNING_SPACE_ID`   | auto-created                      | Explicit Learning Space ID             |
+| `ACONTEXT_SKILLS_DIR`          | `~/.claude/skills`                | Directory where skills are synced      |
+| `ACONTEXT_AUTO_CAPTURE`        | `true`                            | Store messages after each agent turn   |
+| `ACONTEXT_AUTO_LEARN`          | `true`                            | Trigger skill distillation after sessions |
+| `ACONTEXT_MIN_TURNS_FOR_LEARN` | `4`                               | Minimum turns before triggering auto-learn |
 
 ### Claude Code MCP Tools
 
@@ -182,18 +152,16 @@ Settings are resolved with priority: `~/.acontext/` files > environment variable
 
 ## OpenClaw Plugin Configuration
 
-All settings are in `openclaw.json` under the plugin config:
+After `acontext login`, the plugin works automatically — API key and user are read from `~/.acontext/`. Optional overrides in `openclaw.json` config:
 
-| Key                | Type      | Default                           | Description                                                     |
-| ------------------ | --------- | --------------------------------- | --------------------------------------------------------------- |
-| `apiKey`           | `string`  | —                                 | **Required.** Acontext API key (supports `${ACONTEXT_API_KEY}`) |
-| `baseUrl`          | `string`  | `https://api.acontext.app/api/v1` | API base URL                                                    |
-| `userId`           | `string`  | `"default"`                       | Scope sessions per user                                         |
-| `learningSpaceId`  | `string`  | auto-created                      | Explicit Learning Space ID                                      |
-| `skillsDir`        | `string`  | `~/.openclaw/skills`              | Directory where skills are synced                               |
-| `autoCapture`      | `boolean` | `true`                            | Store messages after each agent turn                            |
-| `autoLearn`        | `boolean` | `true`                            | Trigger skill distillation after sessions                       |
-| `minTurnsForLearn` | `number`  | `4`                               | Minimum turns before triggering auto-learn                      |
+| Key                | Type      | Default                           | Description                              |
+| ------------------ | --------- | --------------------------------- | ---------------------------------------- |
+| `baseUrl`          | `string`  | `https://api.acontext.app/api/v1` | API base URL                             |
+| `learningSpaceId`  | `string`  | auto-created                      | Explicit Learning Space ID               |
+| `skillsDir`        | `string`  | `~/.openclaw/skills`              | Directory where skills are synced        |
+| `autoCapture`      | `boolean` | `true`                            | Store messages after each agent turn     |
+| `autoLearn`        | `boolean` | `true`                            | Trigger skill distillation after sessions |
+| `minTurnsForLearn` | `number`  | `4`                               | Minimum turns before triggering auto-learn |
 
 ### OpenClaw Agent Tools
 
@@ -232,7 +200,8 @@ Restart your shell or run `source ~/.bashrc` / `source ~/.zshrc`. The installer 
 
 ### Claude Code plugin not working
 
-- Ensure `ACONTEXT_API_KEY` is exported in your shell profile
+- Run `acontext whoami` to verify you are logged in
+- Check that `~/.acontext/credentials.json` exists and has a default project
 - Check Claude Code logs for `[info] acontext:` or `[warn] acontext:` messages
 - Verify the plugin is installed: `/plugin list`
 - Skills should appear in `~/.claude/skills/` after the first session
@@ -240,8 +209,8 @@ Restart your shell or run `source ~/.bashrc` / `source ~/.zshrc`. The installer 
 ### OpenClaw plugin not loading
 
 - Confirm `plugins.slots.memory` is set to `"acontext"` in `openclaw.json`
+- Run `acontext whoami` to verify you are logged in
 - Run `openclaw gateway` to restart
-- Check that `ACONTEXT_API_KEY` is exported in your environment
 
 ### No projects found
 
