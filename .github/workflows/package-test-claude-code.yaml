@@ -63,6 +63,17 @@ jobs:
             }
           "
 
+      - name: Verify bundles match committed artifacts
+        run: |
+          if git diff --name-only -- plugin/scripts/ | grep -q .; then
+            echo "Error: Committed bundles differ from a clean rebuild:"
+            git diff --stat -- plugin/scripts/
+            echo ""
+            echo "Hint: run 'npm run release -- X.Y.Z' to rebuild and commit the updated bundles."
+            exit 1
+          fi
+          echo "Bundles match committed artifacts ✓"
+
       - name: Verify plugin manifest
         run: |
           node -e "
