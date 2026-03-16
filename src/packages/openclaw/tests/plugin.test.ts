@@ -15,6 +15,7 @@ import {
   configSchema,
   sanitizeSkillName,
   atomicWriteFile,
+  normalizeMessages,
   AcontextBridge,
   type AcontextConfig,
   type BridgeLogger,
@@ -2213,5 +2214,382 @@ describe("before_compaction and before_reset hooks", () => {
     expect(api.logger.info).toHaveBeenCalledWith(
       expect.stringContaining("cursor reset"),
     );
+  });
+});
+
+// ============================================================================
+// normalizeMessages
+// ============================================================================
+
+describe("normalizeMessages", () => {
+  test("user string content → preserved as-is", () => {
+    const result = normalizeMessages([
+      { role: "user", content: "hello world" },
+    ]);
+    expect(result).toEqual([{ role: "user", content: "hello world" }]);
+  });
+
+  test("user array content → text blocks joined", () => {
+    const result = normalizeMessages([
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "line one" },
+          { type: "text", text: "line two" },
+        ],
+      },
+    ]);
+    expect(result).toEqual([{ role: "user", content: "line one\nline two" }]);
+  });
+
+  test("assistant text + toolCall → content + tool_calls", () => {
+    const result = normalizeMessages([
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Let me check that." },
+          {
+            type: "toolCall",
+            id: "call_123",
+            name: "readFile",
+            arguments: { path: "/tmp/foo" },
+          },
+        ],
+        model: "some-model",
+        usage: { input: 100 },
+      },
+    ]);
+    expect(result).toEqual([
+      {
+        role: "assistant",
+        content: "Let me check that.",
+        tool_calls: [
+          {
+            id: "call_123",
+            type: "function",
+            function: {
+              name: "readFile",
+              arguments: JSON.stringify({ path: "/tmp/foo" }),
+            },
+          },
+        ],
+      },
+    ]);
+  });
+
+  test("assistant content undefined → skipped", () => {
+    const result = normalizeMessages([
+      { role: "assistant", content: undefined, stopReason: "end" },
+    ]);
+    expect(result).toEqual([]);
+  });
+
+  test("assistant content null → skipped", () => {
+    const result = normalizeMessages([
+      { role: "assistant", content: null },
+    ]);
+    expect(result).toEqual([]);
+  });
+
+  test("assistant content empty array → skipped", () => {
+    const result = normalizeMessages([
+      { role: "assistant", content: [] },
+    ]);
+    expect(result).toEqual([]);
+  });
+
+  test("assistant only toolCall no text → content null, tool_calls present", () => {
+    const result = normalizeMessages([
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: "call_456",
+            name: "bash",
+            arguments: { command: "ls" },
+          },
+        ],
+      },
+    ]);
+    expect(result).toEqual([
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "call_456",
+            type: "function",
+            function: {
+              name: "bash",
+              arguments: JSON.stringify({ command: "ls" }),
+            },
+          },
+        ],
+      },
+    ]);
+  });
+
+  test("toolResult → role: tool + tool_call_id", () => {
+    const result = normalizeMessages([
+      {
+        role: "toolResult",
+        toolCallId: "call_123",
+        content: [{ type: "text", text: "file contents here" }],
+      },
+    ]);
+    expect(result).toEqual([
+      {
+        role: "tool",
+        tool_call_id: "call_123",
+        content: "file contents here",
+      },
+    ]);
+  });
+
+  test("thinking blocks → ignored", () => {
+    const result = normalizeMessages([
+      {
+        role: "assistant",
+        content: [
+          { type: "thinking", text: "internal reasoning..." },
+          { type: "text", text: "Here is the answer." },
+        ],
+      },
+    ]);
+    expect(result).toEqual([
+      { role: "assistant", content: "Here is the answer." },
+    ]);
+  });
+
+  test("extra fields (api, model, usage, timestamp) → discarded", () => {
+    const result = normalizeMessages([
+      {
+        role: "user",
+        content: "hi",
+        api: "anthropic",
+        model: "claude-3",
+        usage: { input: 10, output: 20 },
+        timestamp: "2024-01-01T00:00:00Z",
+      },
+    ]);
+    expect(result).toHaveLength(1);
+    const msg = result[0];
+    expect(msg).toEqual({ role: "user", content: "hi" });
+    expect(msg).not.toHaveProperty("api");
+    expect(msg).not.toHaveProperty("model");
+    expect(msg).not.toHaveProperty("usage");
+    expect(msg).not.toHaveProperty("timestamp");
+  });
+
+  test("unknown role → skipped", () => {
+    const result = normalizeMessages([
+      { role: "system", content: "you are helpful" },
+      { role: "user", content: "hello" },
+    ]);
+    expect(result).toEqual([{ role: "user", content: "hello" }]);
+  });
+
+  test("mixed message sequence → complete conversion", () => {
+    const result = normalizeMessages([
+      { role: "user", content: "What files are in /tmp?" },
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "I'll check." },
+          {
+            type: "toolCall",
+            id: "call_1",
+            name: "bash",
+            arguments: { command: "ls /tmp" },
+          },
+        ],
+        model: "claude-3",
+        stopReason: "tool_use",
+      },
+      {
+        role: "toolResult",
+        toolCallId: "call_1",
+        content: [{ type: "text", text: "file1.txt\nfile2.txt" }],
+      },
+      {
+        role: "assistant",
+        content: undefined,
+        stopReason: "end",
+      },
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "There are two files: file1.txt and file2.txt." },
+        ],
+      },
+    ]);
+    expect(result).toEqual([
+      { role: "user", content: "What files are in /tmp?" },
+      {
+        role: "assistant",
+        content: "I'll check.",
+        tool_calls: [
+          {
+            id: "call_1",
+            type: "function",
+            function: {
+              name: "bash",
+              arguments: JSON.stringify({ command: "ls /tmp" }),
+            },
+          },
+        ],
+      },
+      {
+        role: "tool",
+        tool_call_id: "call_1",
+        content: "file1.txt\nfile2.txt",
+      },
+      {
+        role: "assistant",
+        content: "There are two files: file1.txt and file2.txt.",
+      },
+    ]);
+  });
+
+  test("tool_use block type (alternative format) → converted", () => {
+    const result = normalizeMessages([
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            id: "toolu_abc",
+            name: "readFile",
+            input: "/tmp/x",
+          },
+        ],
+      },
+    ]);
+    expect(result).toEqual([
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "toolu_abc",
+            type: "function",
+            function: {
+              name: "readFile",
+              arguments: "/tmp/x",
+            },
+          },
+        ],
+      },
+    ]);
+  });
+
+  test("empty messages array → empty result", () => {
+    expect(normalizeMessages([])).toEqual([]);
+  });
+
+  test("message with no role → skipped", () => {
+    const result = normalizeMessages([
+      { content: "orphan" } as Record<string, unknown>,
+      { role: "user", content: "hello" },
+    ]);
+    expect(result).toEqual([{ role: "user", content: "hello" }]);
+  });
+
+  test("toolResult with toolUseId fallback → converted", () => {
+    const result = normalizeMessages([
+      {
+        role: "toolResult",
+        toolUseId: "toolu_abc",
+        content: [{ type: "text", text: "result" }],
+      },
+    ]);
+    expect(result).toEqual([
+      { role: "tool", tool_call_id: "toolu_abc", content: "result" },
+    ]);
+  });
+
+  test("toolResult without toolCallId or toolUseId → skipped", () => {
+    const result = normalizeMessages([
+      {
+        role: "toolResult",
+        content: [{ type: "text", text: "orphan result" }],
+      },
+    ]);
+    expect(result).toEqual([]);
+  });
+
+  test("toolCall with string arguments → preserved as-is", () => {
+    const result = normalizeMessages([
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: "call_str",
+            name: "exec",
+            arguments: '{"raw":"json"}',
+          },
+        ],
+      },
+    ]);
+    expect(result).toEqual([
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "call_str",
+            type: "function",
+            function: { name: "exec", arguments: '{"raw":"json"}' },
+          },
+        ],
+      },
+    ]);
+  });
+
+  test("toolCall with missing id or name → skipped", () => {
+    const result = normalizeMessages([
+      {
+        role: "assistant",
+        content: [
+          { type: "toolCall", id: "", name: "bash", arguments: {} },
+          { type: "toolCall", id: "call_1", name: "", arguments: {} },
+          { type: "text", text: "still here" },
+        ],
+      },
+    ]);
+    expect(result).toEqual([
+      { role: "assistant", content: "still here" },
+    ]);
+  });
+
+  test("functionCall block type → converted", () => {
+    const result = normalizeMessages([
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "functionCall",
+            id: "fc_1",
+            name: "search",
+            arguments: { query: "test" },
+          },
+        ],
+      },
+    ]);
+    expect(result).toEqual([
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "fc_1",
+            type: "function",
+            function: { name: "search", arguments: JSON.stringify({ query: "test" }) },
+          },
+        ],
+      },
+    ]);
   });
 });
